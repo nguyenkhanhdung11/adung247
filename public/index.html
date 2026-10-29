@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>🎯 FPS Arena 3D</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; user-select: none; }
+  canvas { display: block; }
+
+  /* CROSSHAIR */
+  #crosshair {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 24px; height: 24px; pointer-events: none; z-index: 10;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ''; position: absolute; background: #00ff88;
+    box-shadow: 0 0 6px #00ff88;
+  }
+  #crosshair::before { width: 2px; height: 24px; left: 11px; top: 0; }
+  #crosshair::after { width: 24px; height: 2px; top: 11px; left: 0; }
+
+  /* HUD */
+  #hud {
+    position: fixed; bottom: 20px; left: 20px; color: #fff; z-index: 10;
+    text-shadow: 0 0 10px rgba(0,255,136,0.8);
+  }
+  #hpBar {
+    width: 240px; height: 22px; background: rgba(0,0,0,0.6);
+    border: 2px solid #00ff88; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 0 15px rgba(0,255,136,0.5);
+  }
+  #hpFill {
+    height: 100%; width: 100%;
+    background: linear-gradient(90deg, #00ff88, #00cc66);
+    transition: width 0.2s;
+  }
+  #hpText { font-size: 14px; margin-top: 4px; color: #00ff88; font-weight: bold; }
+
+  /* WEAPON INFO */
+  #weaponBox {
+    position: fixed; bottom: 20px; right: 20px; color: #fff; z-index: 10;
+    text-align: right; text-shadow: 0 0 10px rgba(0,255,136,0.8);
+  }
+  #weaponName { font-size: 28px; font-weight: bold; color: #00ff88; letter-spacing: 2px; }
+  #ammo { font-size: 42px; font-weight: bold; }
+  #weaponList {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 10px; z-index: 10;
+  }
+  .wSlot {
+    padding: 8px 18px; background: rgba(0,0,0,0.6);
+    border: 2px solid rgba(255,255,255,0.3); border-radius: 8px;
+    color: #fff; font-weight: bold; font-size: 13px;
+    transition: all 0.2s;
+  }
+  .wSlot.active {
+    border-color: #00ff88; color: #00ff88;
+    box-shadow: 0 0 15px rgba(0,255,136,0.6);
+    background: rgba(0,255,136,0.15);
+  }
+
+  /* SCOREBOARD */
+  #scoreboard {
+    position: fixed; top: 20px; right: 20px; background: rgba(0,0,0,0.7);
+    padding: 12px 20px; border-radius: 10px; border: 1px solid #00ff88;
+    color: #fff; font-size: 14px; z-index: 10; min-width: 180px;
+  }
+  #scoreboard h3 { color: #00ff88; margin-bottom: 6px; font-size: 13px; letter-spacing: 2px; }
+  #scoreboard .row { display: flex; justify-content: space-between; margin: 3px 0; }
+  #scoreboard .k { color: #00ff88; font-weight: bold; }
+  #scoreboard .d { color: #ff4466; font-weight: bold; }
+
+  /* KILL FEED */
+  #killFeed {
+    position: fixed; top: 20px; left: 20px; z-index: 10;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .killMsg {
+    background: rgba(0,0,0,0.7); padding: 6px 14px; border-radius: 6px;
+    color: #fff; font-size: 13px; border-left: 3px solid #ff4466;
+    animation: fadeIn 0.3s;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+
+  /* DAMAGE OVERLAY */
+  #damageOverlay {
+    position: fixed; inset: 0; pointer-events: none; z-index: 9;
+    background: radial-gradient(circle, transparent 50%, rgba(255,0,0,0.6) 100%);
+    opacity: 0; transition: opacity 0.3s;
+  }
+
+  /* HITMARKER */
+  #hitmarker {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    color: #ff4466; font-size: 28px; font-weight: bold; opacity: 0;
+    pointer-events: none; z-index: 11;
+    transition: opacity 0.15s;
+  }
+
+  /* START SCREEN */
+  #startScreen {
+    position: fixed; inset: 0; background: radial-gradient(circle, #001a0d, #000);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100; color: #fff;
+  }
+  #startScreen h1 {
+    font-size: 64px; color: #00ff88; text-shadow: 0 0 30px #00ff88;
+    letter-spacing: 6px; margin-bottom: 20px;
+  }
+  #startScreen p { color: #aaa; margin-bottom: 30px; font-size: 16px; text-align: center; line-height: 1.8; }
+  #startBtn {
+    padding: 18px 60px; font-size: 22px; font-weight: bold;
+    background: transparent; color: #00ff88; border: 2px solid #00ff88;
+    border-radius: 8px; cursor: pointer; letter-spacing: 4px;
+    box-shadow: 0 0 20px rgba(0,255,136,0.4); transition: all 0.3s;
+  }
+  #startBtn:hover { background: #00ff88; color: #000; box-shadow: 0 0 40px #00ff88; }
+</style>
+</head>
+<body>
+
+<div id="startScreen">
+  <h1>FPS ARENA 3D</h1>
+  <p>
+    🖱️ Chuột: Nhìn & Bắn<br>
+    ⌨️ WASD: Di chuyển | Space: Nhảy | Shift: Chạy<br>
+    🔫 1/2/3: AK-47 / Dao / Lục &nbsp;|&nbsp; Q: Swap nhanh
+  </p>
+  <button id="startBtn">VÀO GAME</button>
+</div>
+
+<div id="crosshair"></div>
+<div id="damageOverlay"></div>
+<div id="hitmarker">✕</div>
+
+<div id="hud">
+  <div id="hpBar"><div id="hpFill"></div></div>
+  <div id="hpText">HP: 100 / 100</div>
+</div>
+
+<div id="weaponBox">
+  <div id="weaponName">AK-47</div>
+  <div id="ammo">30 / 30</div>
+</div>
+
+<div id="weaponList">
+  <div class="wSlot active" data-slot="ak47">1 • AK-47</div>
+  <div class="wSlot" data-slot="knife">2 • DAO</div>
+  <div class="wSlot" data-slot="pistol">3 • LỤC</div>
+</div>
+
+<div id="scoreboard">
+  <h3>BẢNG ĐIỂM</h3>
+  <div class="row"><span>Kills</span><span class="k" id="kills">0</span></div>
+  <div class="row"><span>Deaths</span><span class="d" id="deaths">0</span></div>
+</div>
+
+<div id="killFeed"></div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ============ KHỞI TẠO 3D SCENE ============
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0f1a);
+scene.fog = new THREE.Fog(0x0a0f1a, 20, 80);
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+// ============ ÁNH SÁNG ============
+const ambient = new THREE.AmbientLight(0x404060, 1.2);
+scene.add(ambient);
+
+const moonLight = new THREE.DirectionalLight(0x88aaff, 1.5);
+moonLight.position.set(20, 40, 20);
+moonLight.castShadow = true;
+moonLight.shadow.mapSize.set(2048, 2048);
+moonLight.shadow.camera.left = -50;
+moonLight.shadow.camera.right = 50;
+moonLight.shadow.camera.top = 50;
+moonLight.shadow.camera.bottom = -50;
+scene.add(moonLight);
+
+const greenLight = new THREE.PointLight(0x00ff88, 2, 30);
+greenLight.position.set(0, 5, 0);
+scene.add(greenLight);
+
+// ============ SÀN MAP ============
+const floorGeo = new THREE.PlaneGeometry(80, 80, 40, 40);
+const floorMat = new THREE.MeshStandardMaterial({
+  color: 0x1a2530, roughness: 0.8, metalness: 0.3
+});
+// Tạo grid pattern
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+const gridHelper = new THREE.GridHelper(80, 40, 0x00ff88, 0x1a3a2a);
+gridHelper.position.y = 0.01;
+scene.add(gridHelper);
+
+// ============ VẬT CẢN ============
+const obstacles = []; // lưu hitbox để va chạm
+
+function addBox(x, z, w, h, d, color = 0x2a3a4a) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const mat = new THREE.MeshStandardMaterial({
+    color, roughness: 0.6, metalness: 0.4,
+    emissive: 0x001122, emissiveIntensity: 0.3
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x, h/2, z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  obstacles.push({ x, z, w, d });
+  return mesh;
+}
+
+// Tạo các khối vật cản ngẫu nhiên có chủ đích
+addBox(-10, -10, 4, 3, 4, 0x3a2a3a);
+addBox(10, 10, 5, 4, 5, 0x2a3a2a);
+addBox(-10, 12, 3, 5, 3, 0x3a3a2a);
+addBox(15, -8, 6, 2, 6, 0x2a2a4a);
+addBox(0, 0, 2, 6, 2, 0x00ff88); // cột trung tâm phát sáng
+addBox(-20, 0, 4, 3, 8);
+addBox(20, 0, 4, 3, 8);
+addBox(0, -20, 8, 3, 4);
+addBox(0, 20, 8, 3, 4);
+addBox(-15, -15, 3, 2, 3);
+addBox(18, 15, 4, 4, 4);
+
+// ============ ÁNH SÁNG TRÊN CỘT ============
+const pillarLight = new THREE.PointLight(0x00ff88, 3, 20);
+pillarLight.position.set(0, 6, 0);
+scene.add(pillarLight);
+
+// ============ PLAYER STATE ============
+const player = {
+  x: 0, y: 1.7, z: 0,
+  rx: 0, ry: 0,
+  vy: 0, onGround: true,
+  hp: 100, maxHp: 100,
+  weapon: 'ak47',
+  prevWeapon: 'ak47',
+  kills: 0, deaths: 0,
+  lastShot: 0
+};
+
+const weapons = {
+  ak47: { name: 'AK-47', ammo: 30, maxAmmo: 30, damage: 34, fireRate: 100, reload: 1800, spread: 0.02 },
+  knife: { name: 'DAO', ammo: Infinity, maxAmmo: Infinity, damage: 60, fireRate: 350, reload: 0, spread: 0 },
+  pistol: { name: 'LỤC', ammo: 12, maxAmmo: 12, damage: 22, fireRate: 180, reload: 1200, spread: 0.01 }
+};
+let ammo = { ak47: 30, pistol: 12 };
+
+// ============ VIEW MODEL (SÚNG TRÊN TAY) ============
+const gunGroup = new THREE.Group();
+camera.add(gunGroup);
+scene.add(camera);
+
+// AK-47 view model
+const akModel = new THREE.Group();
+const akBody = new THREE.Mesh(
+  new THREE.BoxGeometry(0.08, 0.12, 0.7),
+  new THREE.MeshStandardMaterial({ color: 0x2a2a2a, metalness: 0.8, roughness: 0.3 })
+);
+akBody.position.set(0.25, -0.22, -0.5);
+akModel.add(akBody);
+
+const akBarrel = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.02, 0.02, 0.4, 8),
+  new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9, roughness: 0.2 })
+);
+akBarrel.rotation.x = Math.PI/2;
+akBarrel.position.set(0.25, -0.18, -0.95);
+akModel.add(akBarrel);
+
+const akMag = new THREE.Mesh(
+  new THREE.BoxGeometry(0.06, 0.18, 0.1),
+  new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.7 })
+);
+akMag.position.set(0.25, -0.35, -0.45);
+akMag.rotation.x = 0.2;
+akModel.add(akMag);
+
+const akGrip = new THREE.Mesh(
+  new THREE.BoxGeometry(0.05, 0.15, 0.08),
+  new THREE.MeshStandardMaterial({ color: 0x1a1a1a })
+);
+akGrip.position.set(0.25, -0.35, -0.2);
+akGrip.rotation.x = -0.2;
+akModel.add(akGrip);
+gunGroup.add(akModel);
+
+// PISTOL view model
+const pistolModel = new THREE.Group();
+const pBody = new THREE.Mesh(
+  new THREE.BoxGeometry(0.07, 0.1, 0.3),
+  new THREE.MeshStandardMaterial({ color: 0x3a3a3a, metalness: 0.8, roughness: 0.3 })
+);
+pBody.position.set(0.25, -0.22, -0.4);
+pistolModel.add(pBody);
+const pBarrel = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.02, 0.02, 0.15, 8),
+  new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9 })
+);
+pBarrel.rotation.x = Math.PI/2;
+pBarrel.position.set(0.25, -0.19, -0.6);
+pistolModel.add(pBarrel);
+const pGrip = new THREE.Mesh(
+  new THREE.BoxGeometry(0.05, 0.15, 0.08),
+  new THREE.MeshStandardMaterial({ color: 0x1a1a1a })
+);
+pGrip.position.set(0.25, -0.34, -0.28);
+pGrip.rotation.x = -0.3;
+pistolModel.add(pGrip);
+pistolModel.visible = false;
+gunGroup.add(pistolModel);
+
+// KNIFE view model
+const knifeModel = new THREE.Group();
+const kBlade = new THREE.Mesh(
+  new THREE.BoxGeometry(0.03, 0.02, 0.35),
+  new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 1, roughness: 0.1 })
+);
+kBlade.position.set(0.28, -0.25, -0.5);
+knifeModel.add(kBlade);
+const kHandle = new THREE.Mesh(
+  new THREE.BoxGeometry(0.05, 0.05, 0.15),
+  new THREE.MeshStandardMaterial({ color: 0x2a1a0a })
+);
+kHandle.position.set(0.28, -0.25, -0.3);
+knifeModel.add(kHandle);
+knifeModel.visible = false;
+gunGroup.add(knifeModel);
+
+// Muzzle flash
+const muzzleFlash = new THREE.PointLight(0xffaa00, 0, 8);
+muzzleFlash.position.set(0.25, -0.18, -1);
+camera.add(muzzleFlash);
+
+// ============ ÂM THANH (Web Audio) ============
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playSound(freq, duration, type = 'square', volume = 0.1) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(freq * 0.3, audioCtx.currentTime + duration);
+  gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + duration);
+}
+
+function playGunshot() { playSound(180, 0.12, 'sawtooth', 0.15); }
+function playKnife()   { playSound(800, 0.08, 'triangle', 0.1); }
+function playHit()     { playSound(1200, 0.05, 'sine', 0.08); }
+function playDeath()   { playSound(100, 0.4, 'sawtooth', 0.15); }
+
+// ============ HIỆU ỨNG ĐẠN ============
+const tracers = [];
+function spawnTracer(origin, dir, color = 0x00ff88) {
+  const geo = new THREE.BufferGeometry();
+  const end = new THREE.Vector3().copy(origin).addScaledVector(dir, 60);
+  geo.setFromPoints([origin, end]);
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9 });
+  const line = new THREE.Line(geo, mat);
+  scene.add(line);
+  tracers.push({ line, life: 0.1 });
+}
+
+// ============ SOCKET ============
+let socket;
+const otherPlayers = {}; // id -> { mesh, data }
+
+function createPlayerMesh(data) {
+  const group = new THREE.Group();
+
+  // Thân
+  const body = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.35, 0.9, 4, 8),
+    new THREE.MeshStandardMaterial({ color: data.color, emissive: data.color, emissiveIntensity: 0.2, roughness: 0.5 })
+  );
+  body.position.y = 0.9;
+  body.castShadow = true;
+  group.add(body);
+
+  // Đầu
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.28, 12, 12),
+    new THREE.MeshStandardMaterial({ color: 0xffddcc, roughness: 0.5 })
+  );
+  head.position.y = 1.7;
+  head.castShadow = true;
+  group.add(head);
+
+  // Name tag (billboard)
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#000'; ctx.fillRect(0,0,256,64);
+  ctx.fillStyle = '#00ff88'; ctx.font = 'bold 32px Arial';
+  ctx.textAlign = 'center'; ctx.fillText(data.id.slice(0,6), 128, 44);
+  const tex = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+  sprite.position.y = 2.3;
+  sprite.scale.set(1.5, 0.4, 1);
+  group.add(sprite);
+
+  scene.add(group);
+  return group;
+}
+
+function connect() {
+  socket = io();
+
+  socket.on('init', ({ self, players }) => {
+    player.x = self.x; player.z = self.z;
+    player.kills = self.kills; player.deaths = self.deaths;
+    Object.values(players).forEach(p => {
+      if (p.id !== socket.id) {
+        otherPlayers[p.id] = { mesh: createPlayerMesh(p), data: p };
+        otherPlayers[p.id].mesh.position.set(p.x, 0, p.z);
+      }
+    });
+  });
+
+  socket.on('playerJoined', (p) => {
+    otherPlayers[p.id] = { mesh: createPlayerMesh(p), data: p };
+    otherPlayers[p.id].mesh.position.set(p.x, 0, p.z);
+  });
+
+  socket.on('playerMoved', (p) => {
+    if (!otherPlayers[p.id]) return;
+    otherPlayers[p.id].data = p;
+    otherPlayers[p.id].mesh.position.set(p.x, 0, p.z);
+    otherPlayers[p.id].mesh.rotation.y = p.ry;
+  });
+
+  socket.on('playerLeft', (id) => {
+    if (otherPlayers[id]) {
+      scene.remove(otherPlayers[id].mesh);
+      delete otherPlayers[id];
+    }
+  });
+
+  socket.on('playerShot', (d) => {
+    const origin = new THREE.Vector3(d.origin.x, d.origin.y, d.origin.z);
+    const dir = new THREE.Vector3(d.dir.x, d.dir.y, d.dir.z);
+    spawnTracer(origin, dir, d.weapon === 'knife' ? 0xffaa00 : 0xff4466);
+    playSound(250, 0.1, 'sawtooth', 0.05);
+  });
+
+  socket.on('damaged', ({ hp, by }) => {
+    player.hp = hp;
+    updateHUD();
+    showDamageOverlay();
+    if (hp > 0) playHit();
+  });
+
+  socket.on('respawn', ({ hp, x, z, kills, deaths }) => {
+    player.hp = hp; player.x = x; player.z = z;
+    player.kills = kills; player.deaths = deaths;
+    updateHUD();
+    playDeath();
+  });
+
+  socket.on('scoreUpdate', ({ kills, deaths }) => {
+    player.kills = kills; player.deaths = deaths;
+    updateHUD();
+  });
+
+  socket.on('killFeed', ({ killer, victim }) => {
+    const div = document.createElement('div');
+    div.className = 'killMsg';
+    div.textContent = `${killer.slice(0,6)} 💀 ${victim.slice(0,6)}`;
+    document.getElementById('killFeed').appendChild(div);
+    setTimeout(() => div.remove(), 4000);
+  });
+}
+
+// ============ ĐIỀU KHIỂN ============
+const keys = {};
+let mouseLocked = false;
+let mouseX = 0, mouseY = 0;
+
+document.addEventListener('keydown', (e) => {
+  keys[e.code] = true;
+  if (!mouseLocked) return;
+
+  if (e.code === 'Digit1') switchWeapon('ak47');
+  if (e.code === 'Digit2') switchWeapon('knife');
+  if (e.code === 'Digit3') switchWeapon('pistol');
+  if (e.code === 'KeyQ') {
+    const tmp = player.weapon;
+    switchWeapon(player.prevWeapon === player.weapon ? (player.weapon === 'ak47' ? 'pistol' : 'ak47') : player.prevWeapon);
+  }
+  if (e.code === 'KeyR') reload();
+});
+document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+document.addEventListener('mousemove', (e) => {
+  if (!mouseLocked) return;
+  player.ry -= e.movementX * 0.002;
+  player.rx -= e.movementY * 0.002;
+  player.rx = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, player.rx));
+});
+
+document.addEventListener('mousedown', (e) => {
+  if (!mouseLocked) return;
+  if (e.button === 0) tryShoot();
+});
+
+document.addEventListener('pointerlockchange', () => {
+  mouseLocked = document.pointerLockElement !== null;
+});
+
+// ============ LOGIC VŨ KHÍ ============
+function switchWeapon(w) {
+  if (player.weapon === w) return;
+  player.prevWeapon = player.weapon;
+  player.weapon = w;
+  akModel.visible = w === 'ak47';
+  pistolModel.visible = w === 'pistol';
+  knifeModel.visible = w === 'knife';
+
+  document.querySelectorAll('.wSlot').forEach(el => {
+    el.classList.toggle('active', el.dataset.slot === w);
+  });
+  updateHUD();
+}
+
+function reload() {
+  const w = weapons[player.weapon];
+  if (w.ammo === Infinity) return;
+  if (ammo[player.weapon] >= w.maxAmmo) return;
+  playSound(400, 0.2, 'square', 0.05);
+  setTimeout(() => {
+    ammo[player.weapon] = w.maxAmmo;
+    updateHUD();
+  }, w.reload);
+}
+
+let isShooting = false;
+function tryShoot() {
+  const now = performance.now();
+  const w = weapons[player.weapon];
+  if (now - player.lastShot < w.fireRate) return;
+  player.lastShot = now;
+
+  if (player.weapon !== 'knife') {
+    if (ammo[player.weapon] <= 0) { reload(); return; }
+    ammo[player.weapon]--;
+    updateHUD();
+    playGunshot();
+    muzzleFlash.intensity = 3;
+    setTimeout(() => muzzleFlash.intensity = 0, 60);
+    // Recoil
+    gunGroup.position.z = 0.08;
+    setTimeout(() => gunGroup.position.z = 0, 80);
+    player.rx += 0.01 + Math.random() * w.spread;
+  } else {
+    playKnife();
+  }
+
+  // Raycast từ tâm màn hình
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+
+  // Áp dụng spread
+  dir.x += (Math.random() - 0.5) * w.spread;
+  dir.y += (Math.random() - 0.5) * w.spread;
+  dir.normalize();
+
+  const origin = { x: camera.position.x, y: camera.position.y, z: camera.position.z };
+  spawnTracer(new THREE.Vector3(origin.x, origin.y, origin.z), dir, player.weapon === 'knife' ? 0xffaa00 : 0xffaa44);
+
+  // Gửi lên server
+  socket.emit('shoot', {
+    weapon: player.weapon,
+    origin,
+    dir: { x: dir.x, y: dir.y, z: dir.z }
+  });
+
+  // Client-side hit detection (hiệu ứng)
+  if (player.weapon !== 'knife') {
+    const ray = new THREE.Raycaster(new THREE.Vector3(origin.x, origin.y, origin.z), dir, 0, 100);
+    const meshes = Object.values(otherPlayers).map(o => o.mesh);
+    const hits = ray.intersectObjects(meshes, true);
+    if (hits.length > 0) showHitmarker();
+  }
+}
+
+function showHitmarker() {
+  const hm = document.getElementById('hitmarker');
+  hm.style.opacity = '1';
+  setTimeout(() => hm.style.opacity = '0', 150);
+}
+
+function showDamageOverlay() {
+  const o = document.getElementById('damageOverlay');
+  o.style.opacity = '1';
+  setTimeout(() => o.style.opacity = '0', 300);
+}
+
+// ============ HUD UPDATE ============
+function updateHUD() {
+  document.getElementById('hpFill').style.width = (player.hp / player.maxHp * 100) + '%';
+  document.getElementById('hpText').textContent = `HP: ${Math.max(0, player.hp)} / ${player.maxHp}`;
+
+  const w = weapons[player.weapon];
+  document.getElementById('weaponName').textContent = w.name;
+  document.getElementById('ammo').textContent = w.ammo === Infinity ? '∞' : `${ammo[player.weapon]} / ${w.maxAmmo}`;
+  document.getElementById('kills').textContent = player.kills;
+  document.getElementById('deaths').textContent = player.deaths;
+}
+
+// ============ VA CHẠM ============
+function checkCollision(nx, nz) {
+  const r = 0.4;
+  for (const o of obstacles) {
+    const hw = o.w/2 + r, hd = o.d/2 + r;
+    if (Math.abs(nx - o.x) < hw && Math.abs(nz - o.z) < hd) return true;
+  }
+  if (Math.abs(nx) > 39 || Math.abs(nz) > 39) return true;
+  return false;
+}
+
+// ============ GAME LOOP ============
+const clock = new THREE.Clock();
+const MOVE_SPEED = 8;
+const RUN_MULT = 1.6;
+const GRAVITY = 25;
+const JUMP = 8;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.1);
+
+  // Di chuyển
+  if (mouseLocked) {
+    const speed = MOVE_SPEED * (keys['ShiftLeft'] ? RUN_MULT : 1) * dt;
+    let dx = 0, dz = 0;
+    if (keys['KeyW']) { dx -= Math.sin(player.ry); dz -= Math.cos(player.ry); }
+    if (keys['KeyS']) { dx += Math.sin(player.ry); dz += Math.cos(player.ry); }
+    if (keys['KeyA']) { dx -= Math.cos(player.ry); dz += Math.sin(player.ry); }
+    if (keys['KeyD']) { dx += Math.cos(player.ry); dz -= Math.sin(player.ry); }
+
+    const len = Math.sqrt(dx*dx + dz*dz);
+    if (len > 0) { dx /= len; dz /= len; }
+
+    const nx = player.x + dx * speed;
+    const nz = player.z + dz * speed;
+    if (!checkCollision(nx, player.z)) player.x = nx;
+    if (!checkCollision(player.x, nz)) player.z = nz;
+
+    // Nhảy + trọng lực
+    if (keys['Space'] && player.onGround) {
+      player.vy = JUMP;
+      player.onGround = false;
+    }
+    player.vy -= GRAVITY * dt;
+    player.y += player.vy * dt;
+    if (player.y <= 1.7) { player.y = 1.7; player.vy = 0; player.onGround = true; }
+
+    // Head bob
+    const moving = len > 0 && player.onGround;
+    if (moving) {
+      gunGroup.position.y = Math.sin(performance.now() * 0.01) * 0.015;
+      gunGroup.position.x = Math.cos(performance.now() * 0.005) * 0.01;
+    }
+
+    // Bắn liên tục (giữ chuột)
+    if (keys['MouseLeft'] || (player.weapon !== 'knife' && document.querySelector('body').matches(':hover'))) {
+      // handled by mousedown event
+    }
+  }
+
+  // Cập nhật camera
+  camera.position.set(player.x, player.y, player.z);
+  camera.rotation.order = 'YXZ';
+  camera.rotation.y = player.ry;
+  camera.rotation.x = player.rx;
+
+  // Cập nhật vị trí lên server
+  if (socket && socket.connected) {
+    socket.emit('move', {
+      x: player.x, y: player.y, z: player.z,
+      rx: player.rx, ry: player.ry,
+      weapon: player.weapon
+    });
+  }
+
+  // Cập nhật tracer
+  for (let i = tracers.length - 1; i >= 0; i--) {
+    tracers[i].life -= dt;
+    tracers[i].line.material.opacity = tracers[i].life * 10;
+    if (tracers[i].life <= 0) {
+      scene.remove(tracers[i].line);
+      tracers.splice(i, 1);
+    }
+  }
+
+  // Cập nhật người chơi khác
+  Object.values(otherPlayers).forEach(({ mesh, data }) => {
+    mesh.position.x += (data.x - mesh.position.x) * 0.3;
+    mesh.position.z += (data.z - mesh.position.z) * 0.3;
+    mesh.rotation.y += (data.ry - mesh.rotation.y) * 0.3;
+  });
+
+  // Pulse light
+  greenLight.intensity = 2 + Math.sin(performance.now() * 0.003) * 0.5;
+
+  renderer.render(scene, camera);
+}
+
+// ============ RESIZE ============
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ============ START GAME ============
+document.getElementById('startBtn').addEventListener('click', () => {
+  document.getElementById('startScreen').style.display = 'none';
+  audioCtx.resume();
+  renderer.domElement.requestPointerLock();
+  connect();
+  updateHUD();
+  animate();
+});
+</script>
+</body>
+</html>
